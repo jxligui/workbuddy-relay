@@ -1,0 +1,10 @@
+{
+  "name": "workbuddy-relay-lifecycle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tui": "./tui.js",
+    "./gui-experimental": "./dist/gui-experimental.cjs"
+  }
+}

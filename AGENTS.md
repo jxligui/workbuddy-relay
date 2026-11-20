@@ -7,8 +7,11 @@
 
 - 不加第三方 npm 运行时依赖；写 JSON 用 UTF-8 无 BOM；日期用
   `new Date().toLocaleDateString("sv")` 得 `YYYY-MM-DD`。
-- 端口 `41142`，仅监听 `127.0.0.1`；长驻服务，与 OpenCode 生命周期无关；
-  单实例靠 `~/.workbuddy-relay/relay.lock`。
+- 端口 `41142`，仅监听 `127.0.0.1`；单实例靠 `~/.workbuddy-relay/relay.lock`。
+- 生命周期随 OpenCode：桌面 app / CLI 打开时由 lifecycle 插件拉起 relay，最后一个
+  客户端退出时停止。插件在 `plugin/`（TUI 端 `tui.js`、桌面端
+  `dist/gui-experimental.cjs`），分别由 `cli.json` / `opencode.json` 的 `plugins` 加载；
+  客户端登记表 `~/.workbuddy-relay/relay-clients.json`。无开机自启。
 - 状态目录 `%USERPROFILE%\.workbuddy-relay\`（可 `WB_RELAY_HOME` 覆盖）：
   `relay.json`(port/secret/pid)、`credential.json`、`catalog.json`、`checkin.json`、
   `relay-crash.log`。管理端点需 `Authorization: Bearer <secret>`。

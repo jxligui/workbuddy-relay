@@ -12,13 +12,19 @@ OpenCode（providers.workbuddy，openai-compatible）
   → https://copilot.tencent.com/v2/chat/completions（WorkBuddy 云网关，SSE）
 ```
 
-## 生命周期（常驻服务）
+## 生命周期（随 OpenCode 启停）
 
-- 开机自动启动：Windows 启动文件夹里的 `workbuddy-relay.cmd`（幂等——端口已有
-  健康中继应答时不重复启动）。
-- 不自动退出：OpenCode 关闭后中继继续在后台运行（只监听 127.0.0.1，无风险）。
-  想停就结束对应的 node 进程或重启机器。
-- 单实例锁：`~/.workbuddy-relay/relay.lock`（原子创建 + pid 存活检查 + 死锁接管）。
+中继跟随 OpenCode 客户端（桌面 app / 命令行 CLI）的生命周期：
+
+- 打开 OpenCode（桌面版或终端 `opencode`）：lifecycle 插件自动拉起中继（幂等启动脚本
+  `start-relay.cmd`）。
+- 所有 OpenCode 客户端都退出后：自动停止中继。
+- 用一个客户端登记表 `~/.workbuddy-relay/relay-clients.json` 跟踪活跃客户端，按 pid
+  存活自动清理，最后一个退出才停。
+- 无开机自启。单实例锁：`~/.workbuddy-relay/relay.lock`。
+
+插件位于 `plugin/`：CLI 端 `tui.js`（由 `cli.json` 加载），桌面端
+`dist/gui-experimental.cjs`（由 `opencode.json` 加载）。
 
 **认证（双通道，自动选择）**
 
@@ -95,16 +101,19 @@ curl http://127.0.0.1:41142/healthz
 认证：优先使用 OpenCode 桌面端注入的 WorkBuddy JWT；需要网页登录时调用
 `POST /wb/login/start`，在浏览器打开返回的 `verificationUri` 完成登录。
 
-开机自启（可选）：把 `start-relay.cmd` 复制到启动文件夹。
+lifecycle 插件随 OpenCode 自动启停中继。配置（安装后确认已启用）：
 
-```powershell
-Copy-Item start-relay.cmd "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\workbuddy-relay.cmd"
+```jsonc
+// ~/.config/opencode/cli.json       —— 终端 CLI
+{ "plugins": ["workbuddy-relay"] }
+// ~/.config/opencode/opencode.json  —— 桌面版
+{ "plugins": ["workbuddy-relay"] }
 ```
 
 ## 使用
 
 ```powershell
-# 已注册到开机启动项 workbuddy-relay.cmd；手动启动也一样（幂等）
+# 打开 OpenCode 时由插件自动拉起；手动启动也一样（幂等）
 node server.mjs
 
 # 模型/折扣变化后刷新 OpenCode 配置（模型名自动带新徽章）
@@ -135,4 +144,5 @@ WorkBuddy 限制非官方客户端，上游 `11140` 账号级限制已有报告�
 - `lib/chat.mjs` — 请求体准备（system 头、强制流式）、渠道校验救援、SSE 透传/聚合
 - `lib/checkin.mjs` — 每日签到（状态查询、幂等领取、当日去重）
 - `refresh-models.mjs` — 一键刷新目录并重写 opencode.json
-- `start-relay.cmd` — 幂等启动脚本（已复制到 Windows 启动文件夹）
+- `start-relay.cmd` — 幂等启动脚本（lifecycle 插件调用）
+- `plugin/` — lifecycle 插件（CLI 端 `tui.js`、桌面端 `dist/gui-experimental.cjs`）
