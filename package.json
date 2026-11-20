@@ -1,0 +1,15 @@
+{
+  "name": "workbuddy-relay",
+  "version": "0.1.0",
+  "description": "Local OpenAI-compatible relay for WorkBuddy (CN) cloud gateway: web-login auth, model catalog with promotions, chat translation.",
+  "type": "module",
+  "bin": {
+    "workbuddy-relay": "./server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

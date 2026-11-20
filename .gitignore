@@ -1,0 +1,13 @@
+# 运行时状态（含 token/secret，绝不提交）
+.workbuddy-relay/
+*.log
+relay-crash.log
+
+# Node
+node_modules/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
