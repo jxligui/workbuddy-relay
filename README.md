@@ -1,137 +1,80 @@
 # workbuddy-relay
 
-把 WorkBuddy（国内版）的模型接入 OpenCode：本地 OpenAI 兼容中继 + 网页登录 +
-带折扣徽章的模型目录。
+把 WorkBuddy（国内版）的模型接入 OpenCode：一个 **OpenCode 服务端插件**，进程内
+直连 WorkBuddy 云网关——动态模型目录（带折扣徽章）+ 网页登录 + 每日签到。
+没有独立本地服务，没有任何需要手动启动的进程。
 
 ## 架构
 
 ```
-OpenCode（providers.workbuddy，openai-compatible）
-  → http://127.0.0.1:41142/v1/chat/completions     （本地中继，Bearer 鉴权）
-  → 中继翻译：会话三件套头 + CLI UA + system 头 + 渠道校验救援
+OpenCode 服务进程
+  └─ 插件（setup，随 OpenCode 加载/卸载）
+       ├─ loopback shim（127.0.0.1 随机端口，仅进程内可见）
+       │    OpenAI 兼容入口 → 翻译为 WorkBuddy 网关协议：
+       │    会话三件套头 + CLI UA + system 头 + 渠道校验救援 + 强制流式 + SSE
+       ├─ ctx.provider.transform 注册 `workbuddy` provider（baseURL 指向 shim）
+       │    模型目录实时来自 /v3/config（App 通道 UA），折扣徽章进显示名
+       └─ 每日签到（启动 + 30 分钟定时器）
   → https://copilot.tencent.com/v2/chat/completions（WorkBuddy 云网关，SSE）
 ```
 
-## 生命周期（随 OpenCode 启停）
+与 dsh-connect-workbuddy（DSH 插件）同构：协议翻译层运行在宿主进程内，随宿主
+自动启停，没有独立进程。
 
-中继跟随 OpenCode 客户端（桌面 app / 命令行 CLI）的生命周期：
+## 生命周期
 
-- 打开 OpenCode（桌面版或终端 `opencode`）：lifecycle 插件自动拉起中继（幂等启动脚本
-  `start-relay.cmd`）。
-- 所有 OpenCode 客户端都退出后：自动停止中继。
-- 用一个客户端登记表 `~/.workbuddy-relay/relay-clients.json` 跟踪活跃客户端，按 pid
-  存活自动清理，最后一个退出才停。
-- 无开机自启。单实例锁：`~/.workbuddy-relay/relay.lock`。
+- 插件随 OpenCode 服务加载：shim 监听、provider 注册、签到调度全部就绪。
+- 所有 OpenCode 客户端关闭、服务进程退出时，插件 cleanup 自动关闭 shim。
+- 无开机自启、无独立进程、无窗口弹框。每个 OpenCode 项目目录一个 shim 实例
+  （随机端口互不冲突），与 DSH 的每宿主一 shim 一致。
 
-插件位于 `plugin/`：CLI 端 `tui.js`（由 `cli.json` 加载），桌面端
-`dist/gui-experimental.cjs`（由 `opencode.json` 加载）。
+## 功能
 
-**认证（双通道，自动选择）**
-
-1. **桌面端 JWT 透传**（推荐）：OpenCode 桌面版自动向发往本中继的请求注入
-   WorkBuddy 桌面 App 的 keychain JWT（`app_type=codebuddy`），中继原样转发，
-   token 生命周期由桌面端管理。该 JWT 会覆盖配置里的 Authorization。
-2. **网页登录凭据**（兜底）：`POST /wb/login/start` 拿授权页 URL → 浏览器登录
-   → `GET /wb/login/poll` 取 token → 存 `%USERPROFILE%\.workbuddy-relay\credential.json`；
-   过期自动调 `POST /v2/plugin/auth/token/refresh` 刷新（`X-Refresh-Token` 头）。
-
-## 端点
-
-| 路由 | 说明 |
-|---|---|
-| `GET /healthz` | 无鉴权；登录/目录状态 |
-| `GET /v1/models` | OpenAI 模型列表（来自 `/v3/config` 目录投影） |
-| `POST /v1/chat/completions` | OpenAI 聊天；流式透传 / 非流式聚合 |
-| `POST /wb/login/start` · `GET /wb/login/poll` | 网页登录（需 relay secret） |
-| `POST /wb/refresh` | 强制刷新 token |
-| `POST /wb/catalog` · `GET /wb/catalog` | 刷新/读取模型目录（含活动徽章计算） |
-| `GET /wb/opencode-config` | 生成可粘贴的 providers 配置段 |
-| `GET /wb/checkin` | 立即签到（幂等，当天只生效一次） |
-| `GET /wb/checkin-status` | 签到状态（本地记录 + 上游状态） |
-
-管理端点要求 relay secret（`relay.json`）；`/v1/*` 接受 secret 或任意 Bearer
-（桌面端注入的 JWT）。中继只监听 `127.0.0.1`。
+- **动态模型目录**：实时投影 `/v3/config`，显示名带倍率与活动徽章
+  （如 `GLM-5.3-Flash · x0.08 · 订阅优先`），夜间折扣等按时段自动生效；
+  每 30 分钟自动刷新。
+- **每日签到**（Buddy 加油站）：启动 + 每 30 分钟检查，当天去重
+  （本地记录 + 上游幂等 `code 10001`），零重复请求。
+- **凭据管理**：桌面端注入的 WorkBuddy JWT 优先透传；命令行场景用本地凭据
+  （`credential.json`），过期自动刷新。
 
 ## 关键协议事实
 
-- **聊天只支持流式**：非流式请求被网关以 `11101` 拒绝；中继强制 `stream:true`，
-  为非流式客户端聚合 SSE。
-- **会话三件套必须**：`X-Conversation-ID` / `X-Conversation-Request-ID` /
-  `X-Conversation-Message-ID`（任意合法 UUID），否则 `11128 conversation id missing`。
-- **首条消息必须是 system**（同一 11128 门的另一条腿）。
-- **渠道校验（11128 家族）**：网关对 system/assistant 内容做指纹匹配
-  （"You are an AI agent powered by …"、"You are Claude Code…" 等前缀+子串）。
-  被拒时句边界插零宽空格扰动后重试一次。
-- **目录必须用 App 通道 UA**：`WorkBuddy/5.8.3 WorkBuddy/5.8.3 CLI/2.161.0` 读
-  `/v3/config` 才有完整模型 + `modelPromotions`/`modelTiers`；CLI UA 只有子集。
-  目录主机 `https://www.workbuddy.cn`（与聊天主机 `copilot.tencent.com` 不同）。
-- **促销数据结构**：`data.modelPromotions[]` = `{modelIds, badge.label,
-  discount.discountedCredits, schedule:{daily:[{start,end}], validFrom, validUntil,
-  timezone}}`；`data.modelTiers[]` = 常驻徽章（订阅优先）。徽章是时钟的函数：
-  夜间折扣 23:00–7:50 生效时倍率自动变 `x0.50`，白天自动回 `x0.79`。
-- **usage 带 `credit`**：每次请求真实扣积分（如 glm-5.3-flash 一次小对话 0.01）。
-
-## 自动签到
-
-- 启动时 `startupCheckin()` + 每 30 分钟 `startCheckinTimer()`（首轮立即执行，覆盖
-  跨午夜的长运行）。
-- 当天去重：`~/.workbuddy-relay/checkin.json` 单条当日记录（当天已有则零网络请求）
-  + 上游幂等（`code 10001`）。
-- 签到接口在计费主机 `www.codebuddy.cn`（非网关主机），上游幂等。
+- 聊天只支持流式：强制 `stream:true`，非流式由 shim 聚合 SSE（网关拒绝非流式 `11101`）。
+- 必填会话三件套头（`X-Conversation-ID` / `-Request-ID` / `-Message-ID`）；首条消息
+  必须 system；否则 `11128`。
+- 渠道校验（`11128` 家族）：网关对 system/assistant 内容做指纹匹配，命中时句边界
+  插零宽空格重试一次。
+- 目录必须用 App 通道 UA（`PRODUCT_UA`）读 `https://www.workbuddy.cn/v3/config`；
+  聊天主机是 `copilot.tencent.com`。
+- 签到在计费主机 `www.codebuddy.cn`，上游幂等（`code 10001`）。
 
 ## 安装
 
-环境要求：Windows、Node.js 20+。无需 `npm install`（零运行时依赖）。
-
-**中继不需要手动常驻启动** —— 由 lifecycle 插件随 OpenCode 自动启停：打开 OpenCode
-就启动，所有 OpenCode 客户端关闭就停止，不开 OpenCode 时不运行。
+环境要求：Windows、Node.js 20+（仅登录脚本需要；插件由 OpenCode 自己运行）。
 
 ```powershell
-# 1. 克隆（代码推送到 GitHub 后可用；本地开发直接用当前目录）
+# 1. 克隆
 git clone https://github.com/jxligui/workbuddy-relay.git
 cd workbuddy-relay
 
-# 2. 生成 OpenCode providers 配置（写入 ~/.config/opencode/opencode.json）
-node refresh-models.mjs
+# 2. 在 ~/.config/opencode/opencode.json 里注册插件
+#    "plugins": ["<克隆路径>/plugin"]
+
+# 3. 登录（首次或凭据失效时；浏览器授权，写 credential.json）
+node plugin/login-cli.mjs
+
+# 4. 重启 OpenCode——模型选择器即出现 WorkBuddy 及其模型
 ```
 
-启用 lifecycle 插件（安装后确认已配置，路径指向本项目）：
-
-```jsonc
-// ~/.config/opencode/cli.json       —— 终端 CLI
-{ "plugins": ["D:/WorkSpace/OpenCode/workbuddy-relay/plugin"] }
-// ~/.config/opencode/opencode.json  —— 桌面版
-{ "plugins": ["D:/WorkSpace/OpenCode/workbuddy-relay/plugin"] }
-```
-
-重启 OpenCode 后插件生效：打开即自动拉起中继，关闭即停止。验证：
-`curl http://127.0.0.1:41142/healthz`。
-
-认证：优先使用 OpenCode 桌面端注入的 WorkBuddy JWT；需要网页登录时调用
-`POST /wb/login/start`，在浏览器打开返回的 `verificationUri` 完成登录。
+状态文件在 `%USERPROFILE%\.workbuddy-relay\`：`credential.json`（登录凭据）、
+`catalog.json`（目录缓存）、`checkin.json`（当日签到记录）。
 
 ## 使用
 
-打开 OpenCode（桌面版或终端 `opencode`）即自动启动中继，关闭即停止，无需手动管理。
-
-只有调试时才手动启动（幂等；端口已有健康实例时不会重复拉起）：
-
-```powershell
-node server.mjs
-```
-
-模型/折扣变化后刷新 OpenCode 配置（模型名自动带新徽章）：
-
-```powershell
-node refresh-models.mjs
-```
-
-换账号/凭据失效时重新网页登录：
-`POST /wb/login/start` → 浏览器打开 `verificationUri` → `GET /wb/login/poll?id=...`。
-
-OpenCode 侧配置在 `~/.config/opencode/opencode.json` 的
-`providers.workbuddy`（由 refresh-models.mjs 维护）。选模型时即见
-`GLM-5.3-Flash · x0.08 · 订阅优先` 这类名字。
+打开 OpenCode 即用。模型选择器选择 WorkBuddy 下的模型；签到自动完成。
+手动刷新目录/签到/换账号时可用 shim 的管理端点（见 `plugin/index.js` 路由，
+loopback + 插件内 secret 鉴权）。
 
 ## 风险提示（务必阅读）
 
@@ -141,14 +84,13 @@ WorkBuddy 限制非官方客户端，上游 `11140` 账号级限制已有报告�
 
 ## 文件
 
-- `server.mjs` — 入口（端口 41142，被占用时向上扫描；端口与 secret 存 relay.json；单实例锁防重复拉起；签到调度）
-- `lib/constants.mjs` — 网关 URL / UA / 指纹黑名单等协议常量
-- `lib/store.mjs` — `%USERPROFILE%\.workbuddy-relay\` 状态（credential/catalog/relay.json）
-- `lib/login.mjs` — 网页登录三步流程（`/v2/plugin/auth/*`）
-- `lib/auth.mjs` — token 刷新 + 请求头构造（三件套、UA、Origin/Referer）
-- `lib/catalog.mjs` — `/v3/config` 投影 + 活动徽章计算（时区/每日窗口/日期范围）
-- `lib/chat.mjs` — 请求体准备（system 头、强制流式）、渠道校验救援、SSE 透传/聚合
-- `lib/checkin.mjs` — 每日签到（状态查询、幂等领取、当日去重）
-- `refresh-models.mjs` — 一键刷新目录并重写 opencode.json
-- `start-relay.cmd` — 幂等启动脚本（lifecycle 插件调用）
-- `plugin/` — lifecycle 插件（CLI 端 `tui.js`、桌面端 `dist/gui-experimental.cjs`）
+- `plugin/index.js` — 插件入口（进程内 shim + provider 注册 + 签到调度）
+- `plugin/login-cli.mjs` — 独立网页登录脚本
+- `plugin/lib/constants.mjs` — 网关 URL / UA / 指纹黑名单等协议常量
+- `plugin/lib/store.mjs` — `%USERPROFILE%\.workbuddy-relay\` 状态
+- `plugin/lib/login.mjs` — 网页登录三步流程
+- `plugin/lib/auth.mjs` — token 刷新 + 请求头构造
+- `plugin/lib/catalog.mjs` — `/v3/config` 投影 + 活动徽章计算
+- `plugin/lib/chat.mjs` — 请求体准备、渠道校验救援、SSE 透传/聚合
+- `plugin/lib/checkin.mjs` — 每日签到
+- `sangfor-restore.ps1` — 深信服服务恢复脚本（环境维护用）

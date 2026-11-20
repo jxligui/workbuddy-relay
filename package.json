@@ -1,14 +1,9 @@
 {
   "name": "workbuddy-relay",
-  "version": "0.1.0",
-  "description": "Local OpenAI-compatible relay for WorkBuddy (CN) cloud gateway: web-login auth, model catalog with promotions, chat translation.",
+  "version": "0.2.0",
+  "description": "In-process WorkBuddy provider plugin for OpenCode (CN): dynamic provider registration, promo badges, daily check-in. No standalone service.",
   "type": "module",
-  "bin": {
-    "workbuddy-relay": "./server.mjs"
-  },
-  "scripts": {
-    "start": "node server.mjs"
-  },
+  "private": true,
   "engines": {
     "node": ">=20"
   }
