@@ -93,4 +93,3 @@ WorkBuddy 限制非官方客户端，上游 `11140` 账号级限制已有报告�
 - `plugin/lib/catalog.mjs` — `/v3/config` 投影 + 活动徽章计算
 - `plugin/lib/chat.mjs` — 请求体准备、渠道校验救援、SSE 透传/聚合
 - `plugin/lib/checkin.mjs` — 每日签到
-- `sangfor-restore.ps1` — 深信服服务恢复脚本（环境维护用）

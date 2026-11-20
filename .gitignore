@@ -1,7 +1,7 @@
-# 运行时状态（含 token/secret，绝不提交）
+# 运行时状态（含 token，绝不提交）
 .workbuddy-relay/
 *.log
-relay-crash.log
+*.tmp
 
 # Node
 node_modules/

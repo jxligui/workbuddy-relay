@@ -21,7 +21,7 @@ provider 注册 + 每日签到。纯 Node ESM，零运行时依赖。与 dsh-con
   `new Date().toLocaleDateString("sv")` 得 `YYYY-MM-DD`。
 - 状态目录 `%USERPROFILE%\.workbuddy-relay\`（可 `WB_RELAY_HOME` 覆盖）：
   `credential.json`（登录凭据）、`catalog.json`（目录缓存）、`checkin.json`
-  （当日签到）。`relay.json`/`relay.lock` 是旧独立进程的遗留，不再使用。
+  （当日签到）。
 - shim 鉴权：任意 Bearer 放行到 chat；`/wb/*` 管理端点要求插件内 secret。
   bearer == secret 时用 vault 凭据，否则视为桌面端注入的 JWT 透传网关。
 
@@ -37,8 +37,7 @@ provider 注册 + 每日签到。纯 Node ESM，零运行时依赖。与 dsh-con
 ## 当前集成
 
 `opencode.json`：`plugins` 指向本项目 `plugin/`；无静态 `providers.workbuddy`
-（插件动态注册）。MCP 为 `context7` + `websearch`。Windows 环境：深信服
-`SangforSP` 已禁用（恢复脚本 `sangfor-restore.ps1`）；MySQL/Redis 默认 Stopped。
+（插件动态注册）。MCP 为 `context7` + `websearch`。
 
 ## 命令
 
