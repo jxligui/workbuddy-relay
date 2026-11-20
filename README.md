@@ -83,32 +83,32 @@ OpenCode（providers.workbuddy，openai-compatible）
 
 环境要求：Windows、Node.js 20+。无需 `npm install`（零运行时依赖）。
 
+**中继不需要手动常驻启动** —— 由 lifecycle 插件随 OpenCode 自动启停：打开 OpenCode
+就启动，所有 OpenCode 客户端关闭就停止，不开 OpenCode 时不运行。
+
 ```powershell
 # 1. 克隆
 git clone https://github.com/jxligui/workbuddy-relay.git
 cd workbuddy-relay
 
-# 2. 启动中继（幂等；端口已有健康实例时不会重复拉起）
-node server.mjs
-
-# 3. 生成 OpenCode providers 配置（写入 ~/.config/opencode/opencode.json）
+# 2. 生成 OpenCode providers 配置（写入 ~/.config/opencode/opencode.json）
 node refresh-models.mjs
-
-# 4. 验证
-curl http://127.0.0.1:41142/healthz
 ```
 
-认证：优先使用 OpenCode 桌面端注入的 WorkBuddy JWT；需要网页登录时调用
-`POST /wb/login/start`，在浏览器打开返回的 `verificationUri` 完成登录。
-
-lifecycle 插件随 OpenCode 自动启停中继。配置（安装后确认已启用）：
+启用 lifecycle 插件（安装后确认已配置，路径指向本项目）：
 
 ```jsonc
 // ~/.config/opencode/cli.json       —— 终端 CLI
-{ "plugins": ["workbuddy-relay"] }
+{ "plugins": ["D:/WorkSpace/OpenCode/workbuddy-relay/plugin"] }
 // ~/.config/opencode/opencode.json  —— 桌面版
-{ "plugins": ["workbuddy-relay"] }
+{ "plugins": ["D:/WorkSpace/OpenCode/workbuddy-relay/plugin"] }
 ```
+
+重启 OpenCode 后插件生效：打开即自动拉起中继，关闭即停止。验证：
+`curl http://127.0.0.1:41142/healthz`。
+
+认证：优先使用 OpenCode 桌面端注入的 WorkBuddy JWT；需要网页登录时调用
+`POST /wb/login/start`，在浏览器打开返回的 `verificationUri` 完成登录。
 
 ## 使用
 
