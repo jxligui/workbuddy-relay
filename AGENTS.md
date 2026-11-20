@@ -38,9 +38,10 @@
 
 ## 当前集成
 
-`opencode.json` 维持 `providers.workbuddy`、`plugins: []`；MCP 为 `context7` +
-`websearch`。Windows 环境：深信服 `SangforSP` 已禁用（恢复脚本
-`sangfor-restore.ps1`）；MySQL/Redis 默认 Stopped。
+`opencode.json` / `cli.json` 的 `plugins` 均指向本项目 `plugin/`（lifecycle），另
+`opencode.json` 含 `providers.workbuddy`；MCP 为 `context7` + `websearch`。
+Windows 环境：深信服 `SangforSP` 已禁用（恢复脚本 `sangfor-restore.ps1`）；
+MySQL/Redis 默认 Stopped。
 
 ## 命令
 

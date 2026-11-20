@@ -87,7 +87,7 @@ OpenCode（providers.workbuddy，openai-compatible）
 就启动，所有 OpenCode 客户端关闭就停止，不开 OpenCode 时不运行。
 
 ```powershell
-# 1. 克隆
+# 1. 克隆（代码推送到 GitHub 后可用；本地开发直接用当前目录）
 git clone https://github.com/jxligui/workbuddy-relay.git
 cd workbuddy-relay
 
@@ -112,16 +112,22 @@ node refresh-models.mjs
 
 ## 使用
 
+打开 OpenCode（桌面版或终端 `opencode`）即自动启动中继，关闭即停止，无需手动管理。
+
+只有调试时才手动启动（幂等；端口已有健康实例时不会重复拉起）：
+
 ```powershell
-# 打开 OpenCode 时由插件自动拉起；手动启动也一样（幂等）
 node server.mjs
-
-# 模型/折扣变化后刷新 OpenCode 配置（模型名自动带新徽章）
-node refresh-models.mjs
-
-# 重新网页登录（换账号/凭据失效时）
-# POST /wb/login/start → 浏览器打开 verificationUri → GET /wb/login/poll?id=...
 ```
+
+模型/折扣变化后刷新 OpenCode 配置（模型名自动带新徽章）：
+
+```powershell
+node refresh-models.mjs
+```
+
+换账号/凭据失效时重新网页登录：
+`POST /wb/login/start` → 浏览器打开 `verificationUri` → `GET /wb/login/poll?id=...`。
 
 OpenCode 侧配置在 `~/.config/opencode/opencode.json` 的
 `providers.workbuddy`（由 refresh-models.mjs 维护）。选模型时即见
