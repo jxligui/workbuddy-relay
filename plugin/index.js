@@ -9,7 +9,6 @@
 //   2. A `workbuddy` provider registered via ctx.provider.transform, whose
 //      baseURL points at the shim — models come live from the /v3/config
 //      catalog (app-channel UA) with discount badges in display names.
-//   3. The daily check-in (startup + 30-min timer).
 //
 // Lifecycle is the host's: the shim listens while the plugin is loaded and is
 // closed in the cleanup function. No standalone process, no startup item, no
@@ -23,7 +22,6 @@ import { startLogin, pollLogin } from "./lib/login.mjs";
 import { refreshCredential, CredentialError } from "./lib/auth.mjs";
 import { fetchCatalog } from "./lib/catalog.mjs";
 import { sendChat, pipeSse, aggregateSse, UpstreamError } from "./lib/chat.mjs";
-import { checkinStatus, dailyCheckin, todayMarker } from "./lib/checkin.mjs";
 
 const PROVIDER_ID = "workbuddy";
 
@@ -140,26 +138,6 @@ export default Plugin.define({
           writeJson(res, 200, catalog ?? { models: [] });
           return;
         }
-        if (route === "/wb/checkin" && req.method === "GET") {
-          try {
-            writeJson(res, 200, await dailyCheckin(store.credential));
-          } catch (error) {
-            const status = /credential|no credential|sign in/i.test(String(error)) ? 401 : 502;
-            writeJson(res, status, { error: { message: String(error.message ?? error), type: "checkin" } });
-          }
-          return;
-        }
-        if (route === "/wb/checkin-status" && req.method === "GET") {
-          try {
-            const upstream = await checkinStatus(store.credential);
-            writeJson(res, 200, { today: todayMarker(), upstream });
-          } catch (error) {
-            const status = /credential|no credential|sign in/i.test(String(error)) ? 401 : 502;
-            writeJson(res, status, { error: { message: String(error.message ?? error), type: "checkin" } });
-          }
-          return;
-        }
-
         // ---- OpenAI-compatible surface (what the provider package calls) ----
         if (route === "/v1/models" && req.method === "GET") {
           writeJson(res, 200, {
@@ -266,44 +244,19 @@ export default Plugin.define({
     const catalogTimer = setInterval(() => void refreshCatalog(), 30 * 60 * 1000);
     catalogTimer.unref?.();
 
-    // ---- daily check-in (startup + 30-min timer) ----
-    const checkinTick = async () => {
-      try {
-        const cred = store.credential;
-        if (!cred?.accessToken) return;
-        const status = await checkinStatus(cred);
-        if (status?.active && !status.today_checked_in) {
-          const result = await dailyCheckin(cred);
-          console.log(`[workbuddy] check-in: ${result.message}`);
-        }
-      } catch {
-        /* retried on the next tick */
-      }
-    };
-    const checkinTimer = setInterval(() => void checkinTick(), 30 * 60 * 1000);
-    checkinTimer.unref?.();
+    // Fresh catalog at startup (badges/promos may have changed since last run).
     void (async () => {
       if (!store.credential?.accessToken) {
         console.log("[workbuddy] not signed in — run: node plugin/login-cli.mjs");
         return;
       }
-      try {
-        if (!todayMarker()) {
-          const result = await dailyCheckin(store.credential);
-          console.log(`[workbuddy] check-in: ${result.message}`);
-        }
-        await refreshCatalog();
-        void checkinTick();
-      } catch (error) {
-        console.error(`[workbuddy] startup check-in failed: ${error.message ?? error}`);
-      }
+      await refreshCatalog();
     })();
 
     console.log(`[workbuddy] provider ready at ${currentBaseURL} (${catalog?.models?.length ?? 0} models)`);
 
     return () => {
       clearInterval(catalogTimer);
-      clearInterval(checkinTimer);
       try {
         server.closeAllConnections?.();
       } catch {

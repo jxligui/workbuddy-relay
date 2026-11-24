@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "In-process WorkBuddy provider for OpenCode: loopback shim + provider transform + daily check-in",
+  "description": "In-process WorkBuddy provider for OpenCode: loopback shim + provider transform",
   "exports": {
     ".": "./index.js"
   }

@@ -1,7 +1,7 @@
 {
   "name": "workbuddy-relay",
   "version": "0.2.0",
-  "description": "In-process WorkBuddy provider plugin for OpenCode (CN): dynamic provider registration, promo badges, daily check-in. No standalone service.",
+  "description": "In-process WorkBuddy provider plugin for OpenCode (CN): dynamic provider registration, promo badges. No standalone service.",
   "type": "module",
   "private": true,
   "engines": {
